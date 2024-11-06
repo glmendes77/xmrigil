@@ -1,0 +1,106 @@
+on: push
+
+name: Create release and build artifacts
+
+jobs:
+  build_win:
+    name: Build Windows artifacts
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Checkout deps
+        run: |
+              git config http.postBuffer 524288000
+              git clone https://github.com/xmrig/xmrig-deps.git
+      - name: Build project on Windows
+        run: |
+          cmake . -G "MinGW Makefiles" -DXMRIG_DEPS=xmrig-deps\gcc\x64
+          make -j2
+          copy src\config.json .
+          copy bin\WinRing0\WinRing0x64.sys .
+          7z a -tzip -mx windows_build.zip xmrig.exe config.json WinRing0x64.sys
+      - name: Upload Windows build artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: windows_build
+          path: windows_build.zip
+
+  build_lin:
+    name: Build Ubuntu artifacts
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Prepare Ubuntu tools
+        run: |
+          sudo apt update
+          sudo apt install -y git build-essential cmake libuv1-dev libssl-dev libhwloc-dev
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Build project on Ubuntu
+        run: |
+          cmake .
+          make -j$(nproc)
+          cp src/config.json .
+          tar cfz ubuntu_build.tar.gz xmrig config.json
+      - name: Upload Ubuntu build artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: ubuntu_build
+          path: ubuntu_build.tar.gz
+
+  build_macos:
+    name: Build MacOS artifacts
+    runs-on: macos-latest
+    steps:
+      - name: Prepare MacOS tools
+        run: |
+          brew install cmake libuv openssl hwloc
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Build hwloc on MacOS
+        run: |
+          curl -O https://download.open-mpi.org/release/hwloc/v2.1/hwloc-2.1.0.tar.bz2
+          tar xjf hwloc-2.1.0.tar.bz2
+          cd hwloc-2.1.0
+          ./configure --disable-shared --enable-static --disable-io --disable-libxml2
+          make -j$(sysctl -n hw.logicalcpu)
+          cd ..
+      - name: Build project on MacOS
+        run: |
+          cmake . -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl -DHWLOC_INCLUDE_DIR=hwloc-2.1.0/include -DHWLOC_LIBRARY=hwloc-2.1.0/hwloc/.libs/libhwloc.a
+          make -j$(sysctl -n hw.logicalcpu)
+          cp src/config.json .
+          tar cfz macos_build.tar.gz xmrig config.json
+      - name: Upload MacOS build artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: macos_build
+          path: macos_build.tar.gz
+
+  build_lin_rh7:
+    name: Build CentOS 7 artifacts
+    runs-on: ubuntu-latest
+    container: centos:7
+    steps:
+      - name: Prepare CentOS 7 tools
+        run: |
+          yum install -y centos-release-scl epel-release
+          yum install -y devtoolset-9
+          yum install -y wget git cmake3 automake libtool autoconf libstdc++-static glibc-static
+      - name: Checkout code
+        uses: actions/checkout@master
+      - name: Build project on CentOS 7
+        run: |
+          source /opt/rh/devtoolset-9/enable
+          cd scripts
+          ./build_deps.sh
+          cd ..
+          cmake3 . -DXMRIG_DEPS=scripts/deps
+          make -j$(nproc)
+          cp src/config.json .
+          tar cfz centos7_build.tar.gz xmrig config.json
+      - name: Upload CentOS 7 build artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: centos7_build
+          path: centos7_build.tar.gz
