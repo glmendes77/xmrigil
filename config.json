@@ -47,7 +47,7 @@
   },
   "donate-level": 0,
   "donate-over-proxy": 1,
-  "log-file": /tmp/xmrig.log,
+  "log-file": "/tmp/xmrig.log",
   "pools": [
     {
       "algo": null,
